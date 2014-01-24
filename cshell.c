@@ -60,7 +60,7 @@ int main(int argc, char ** argv)
 		// Get the content of  the command line string input
 		if(!fgets(cmdLine, 128, stdin))
 			//Output error status when error occurs
-			printf("Error with reading commands\n");
+			fprintf(stderr, "Error with reading commands\n");
 
 		parse_command(cmdLine, &cmdArgc, cmdArgv);
 		if(cmdArgv[0] != NULL){
@@ -111,7 +111,7 @@ int execute_command(int argc, char ** argv){
 	childPid = fork();
 	if (childPid == -1){
 		//If goes error, exit with status code -1
-		printf("Process creation failed\n");
+		fprintf(stderr, "Process creation failed\n");
 		exit(-1);
 	}else if(childPid == 0){
 		//In the child process, execute the command
@@ -122,7 +122,7 @@ int execute_command(int argc, char ** argv){
 		else{
 			if (execvp(argv[0], argv) == -1) {    
 				//If goes error, exit with status code 1
-	            printf("ERROR: exec failed\n");
+	            fprintf(stderr, "ERROR: execvp failed\n");
 	            exit(1);
         	}
 	    }
@@ -205,7 +205,7 @@ int command_ls(int argc, char** argv){
 	}
 
     if ((dir = opendir (dir_path)) == NULL) {
-        fprintf (stderr, "%s is not a directory.\n", dir_path);
+        fprintf(stderr, "%s is not a directory.\n", dir_path);
         return -1;
     }
 
