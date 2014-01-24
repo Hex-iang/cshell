@@ -8,6 +8,10 @@
 #include <ctype.h>
 #include <string.h>
 
+//Mac OS X directory API library
+#include <dirent.h>
+
+
 #define TRUE 1
 #define FALSE 0
 
@@ -191,5 +195,28 @@ int command_pwd(int argc, char** argv){
 	return 0;
 }
 int command_ls(int argc, char** argv){
+	DIR *dir;
+	char * dir_path = ".";
+	struct dirent *dp;
+
+	if((strcmp(argv[argc - 1],"ls")))
+	{
+		dir_path = argv[argc-1];
+	}
+
+    if ((dir = opendir (dir_path)) == NULL) {
+        fprintf (stderr, "%s is not a directory.\n", dir_path);
+        return -1;
+    }
+
+    while ((dp = readdir (dir)) != NULL) { 
+            if((strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)) {
+                continue;
+            }
+
+            printf("%s\n", dp->d_name);
+    }
+	closedir(dir);
+
 	return 0;
 }
