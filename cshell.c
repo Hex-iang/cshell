@@ -24,45 +24,53 @@ typedef struct{
 //Function to prompt the current time
 int print_prompt();
 //Function for executing the command
-int execute_command(int cmdArgc, char ** cmdArgv)
+int execute_command(int argc, char ** argv);
 //Function for parse the string input
-void parse_command(char cmd[], int * cmdArgc, char ** cmdArgv);
+void parse_command(char cmd[], int * argc, char ** argv);
 
 int command_cd(int argc, char** argv);
 int command_pwd(int argc, char** argv);
 int command_ls(int argc, char** argv);
 CMD * command_search(char * commandName);
 
+int is_quit(char * str);
+
 //Create a structure for the information about the command supported by this shell
 CMD cmd[] = {
 	{"pwd", command_pwd, "Print working directory."},
 	{"ls", command_ls, "List information about the FILE."},
 	{"cd", command_cd, "Change the current directory."},
-	{ (char *)NULL, (Function *)NULL, (char *)NULL }
-}
+	{ (char *)NULL, (FUNC)NULL, (char *)NULL }
+};
+
+char * cmdArgv[128];
+int cmdArgc;
+char cmdLine[1024];		
 
 int main(int argc, char ** argv)
 {
-	char * cmdArgv[16];
-	int cmdArgc;
-	char cmdLine[128];	
-
 	//Main loop for shell
 	while(TRUE){
 		print_prompt();
-
+		fflush(NULL);
 		// Get the content of  the command line string input
 		if(!fgets(cmdLine, 128, stdin))
 			//Output error status when error occurs
 			printf("Error with reading commands\n");
-		 
-		parse_command(cmdLine, &cmdArgc, cmdArgv);
 
-		execute_command(cmdArgv,cmdArgc);
+		parse_command(cmdLine, &cmdArgc, cmdArgv);
+		if(cmdArgv[0] != NULL){
+			if(is_quit(cmdArgv[0])){
+				// if the input command is one of 'quit' or 'q' or 'exit', quit the shell with the exit code 0
+				printf(">>===========Quiting mycshell==========<<\n");
+				exit(0);
+			}
+
+			execute_command(cmdArgc, cmdArgv);
+		}
 	}
 	return 0;
 }
-
 
 int print_prompt(){
 	//Data structure for prompting current time
@@ -90,19 +98,10 @@ int print_prompt(){
 
 	return 0;
 }
-int execute_command(int cmdArgc, char ** cmdArgv){
+int execute_command(int argc, char ** argv){
 	int childPid;
 	int status;
-	CMD command;
-
-	if(!strcmp(cmdArgv[0], "quit") || !strcmp(cmdArgv[0],"q") || !strcmp(cmdArgv[0],"exit")){
-		// if the input command is one of 'quit' or 'q' or 'exit', quit the shell with the exit code 0
-		printf(">>===========Quiting mycshell==========<<\n");
-		exit(0);
-	}else if(isspace(*cmdArgv[0])){
-		// if the input command is a space or spacelike characters, step into next iteration
-		return 0;
-	}
+	CMD * command;
 
 	//System call function fork to create a childprocess
 	childPid = fork();
@@ -112,17 +111,18 @@ int execute_command(int cmdArgc, char ** cmdArgv){
 		exit(-1);
 	}else if(childPid == 0){
 		//In the child process, execute the command
-		if(command = command_search(camArgv[0])){
-			command->funct(cmdArgc, cmdArgv);
+		
+		if((command = command_search(argv[0]))){
+			command->funct(argc, argv);
 		}
 		else{
-			printf("The command is not in supported by the shell itself, execute system provided command\n");
-			if (execvp(cmdArgv[0], cmdArgv) == -1) {    
+			if (execvp(argv[0], argv) == -1) {    
 				//If goes error, exit with status code 1
 	            printf("ERROR: exec failed\n");
 	            exit(1);
         	}
 	    }
+
     }else{
 		//Ignore the situation that process running in the background
 		waitpid(childPid, &status, 0);
@@ -136,32 +136,40 @@ char* skip_blank(char* str)
 	while (isspace(*str)) ++str;
 	return str;
 }
-void parse_command(char cmdLine[], int * cmdArgc, char ** cmdArgv){
-	cmdLine = skip_blank(cmdLine);
+void parse_command(char cmd[], int * argc, char ** argv){
+	cmd = skip_blank(cmd);
 	//Make the next pointer point to the next white character
-	char * next;
+	char* next = strchr(cmd, ' ');
 	//variable for counting the last element
 	int last = 0;
 
 	while(next != NULL) {
 		//seprate the first argument
 		next[0] = '\0';
-		cmdArgv[last] = cmdLine;
+		argv[last] = cmd;
 		++last;
-		cmdLine = skip_blank(next + 1);
-		next = strchr(cmdLine, ' ');
+		cmd = skip_blank(next + 1);
+		next = strchr(cmd, ' ');
 	}
- 
-	if (cmdLine[0] != '\0') {
-		cmdArgv[last] = cmdLine;
-		//process the last element 
-		next = strchr(cmdLine, '\n');
+
+	if (cmd[0] != '\0') {
+		argv[last] = cmd;
+		//process the last element
+		next = strchr(cmd, '\n');
 		next[0] = '\0';
 		++last; 
 	}
-	cmdArgv[last] = NULL;
-	*cmdArgc = last;
+	*argc = last;
+	argv[last] = NULL;
+
 }
+
+int is_quit(char * str){
+	if(!strcmp(str, "quit") || !strcmp(str,"q") || !strcmp(str,"exit"))
+		return TRUE;
+	return FALSE;
+}
+//Shell Command 
 
 CMD * command_search(char * commandName)
 {
@@ -176,13 +184,12 @@ CMD * command_search(char * commandName)
 	return NULL;
 }
 
-
 int command_cd(int argc, char** argv){
-
+	return 0;
 }
 int command_pwd(int argc, char** argv){
-
+	return 0;
 }
 int command_ls(int argc, char** argv){
-
+	return 0;
 }
