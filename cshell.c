@@ -8,9 +8,11 @@
 #include <ctype.h>
 #include <string.h>
 
-//Mac OS X directory API library
+//UNIX directory API library
 #include <dirent.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -60,7 +62,7 @@ int main(int argc, char ** argv)
 		// Get the content of  the command line string input
 		if(!fgets(cmdLine, 128, stdin))
 			//Output error status when error occurs
-			fprintf(stderr, "ERROR: read commands failed\n");
+			fprintf(stderr, "ERROR READ COMMANDS:%s\n",strerror( errno ));
 
 		parse_command(cmdLine, &cmdArgc, cmdArgv);
 		if(cmdArgv[0] != NULL){
@@ -111,20 +113,22 @@ int execute_command(int argc, char ** argv){
 	childPid = fork();
 	if (childPid == -1){
 		//If goes error, exit with status code -1
-		fprintf(stderr, "ERROR: Process creation failed\n");
+		fprintf(stderr, "ERROR CREATING PROCESS:%s\n", strerror( errno ));
 		exit(-1);
 	}else if(childPid == 0){
 		//In the child process, execute the command
 
 		if((command = command_search(argv[0]))){
 			if(-1 == command->funct(argc, argv)){
-				fprintf(stderr, "ERROR: Shell function execute failed\n");
+				//fprintf(stderr, "ERROR: Shell function execute failed\n");
+				fprintf(stderr, "ERROR EXECUTING SHELL COMMAND: %s\n", strerror( errno ));
 			}
 		}
 		else{
 			if (execvp(argv[0], argv) == -1) {    
 				//If goes error, exit with status code 1
-				fprintf(stderr, "ERROR: execvp failed\n");
+				fprintf(stderr, "ERROR EXECUTING SYSTEM PROGRAM: %s\n",strerror( errno ));
+
 				exit(1);
 			}
 		}
@@ -191,21 +195,38 @@ CMD * command_search(char * commandName)
 }
 
 int command_cd(int argc, char** argv){
-	return 0;
+	char * dir;
+	struct stat buf;
+
+	if(strcmp(argv[argc-1], "cd") == 0) {
+		// If no parameters, then change to home directory
+		dir = getenv("HOME");
+	}else{
+		// Else change to the specific directory
+		dir = argv[argc-1];
+	}
+
+	// Get the file of the path and see if it is a directory
+	if((-1 == lstat(dir, &buf)) || !S_ISDIR(buf.st_mode))
+		return -1;
+
+	return chdir(dir);
+
 }
 int command_pwd(int argc, char** argv){
-	char * dir = ".";
 	long size;
 	char * buf, * ptr;
 
-	size = pathconf(dir, _PC_PATH_MAX);
+	// Return the maximum value of a directory size for the path
+	size = pathconf(".", _PC_PATH_MAX);
 
+	// Alocate memory for the path string
 	if ((buf = (char *)malloc((size_t)size)) != NULL) {
+		// Get the path name string to the buffer
 		ptr = getcwd(buf, (size_t)size);
 		printf("%s\n", ptr);
 		return 0;
 	}else{
-		fprintf(stderr,"ERROR: No memery for path name");
 		return -1;
 	}
 }
@@ -215,13 +236,15 @@ int command_ls(int argc, char** argv){
 	char * dir_path = ".";
 	struct dirent *entry;
 
+
+	// If there is a path name variable, set the directory path to be that argument
 	if((strcmp(argv[argc - 1],"ls")))
 	{
 		dir_path = argv[argc-1];
 	}
 
+	// Test if the directory path exists
 	if ((dir = opendir (dir_path)) == NULL) {
-		fprintf(stderr, "ERROR: %s is not a directory.\n", dir_path);
 		return -1;
 	}
 
