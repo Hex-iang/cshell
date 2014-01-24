@@ -10,7 +10,7 @@
 
 //Mac OS X directory API library
 #include <dirent.h>
-
+#include <sys/types.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -60,7 +60,7 @@ int main(int argc, char ** argv)
 		// Get the content of  the command line string input
 		if(!fgets(cmdLine, 128, stdin))
 			//Output error status when error occurs
-			fprintf(stderr, "Error with reading commands\n");
+			fprintf(stderr, "ERROR: read commands failed\n");
 
 		parse_command(cmdLine, &cmdArgc, cmdArgv);
 		if(cmdArgv[0] != NULL){
@@ -111,23 +111,25 @@ int execute_command(int argc, char ** argv){
 	childPid = fork();
 	if (childPid == -1){
 		//If goes error, exit with status code -1
-		fprintf(stderr, "Process creation failed\n");
+		fprintf(stderr, "ERROR: Process creation failed\n");
 		exit(-1);
 	}else if(childPid == 0){
 		//In the child process, execute the command
-		
+
 		if((command = command_search(argv[0]))){
-			command->funct(argc, argv);
+			if(-1 == command->funct(argc, argv)){
+				fprintf(stderr, "ERROR: Shell function execute failed\n");
+			}
 		}
 		else{
 			if (execvp(argv[0], argv) == -1) {    
 				//If goes error, exit with status code 1
-	            fprintf(stderr, "ERROR: execvp failed\n");
-	            exit(1);
-        	}
-	    }
+				fprintf(stderr, "ERROR: execvp failed\n");
+				exit(1);
+			}
+		}
 
-    }else{
+	}else{
 		//Ignore the situation that process running in the background
 		waitpid(childPid, &status, 0);
 	}
@@ -192,30 +194,45 @@ int command_cd(int argc, char** argv){
 	return 0;
 }
 int command_pwd(int argc, char** argv){
-	return 0;
+	char * dir = ".";
+	long size;
+	char * buf, * ptr;
+
+	size = pathconf(dir, _PC_PATH_MAX);
+
+	if ((buf = (char *)malloc((size_t)size)) != NULL) {
+		ptr = getcwd(buf, (size_t)size);
+		printf("%s\n", ptr);
+		return 0;
+	}else{
+		fprintf(stderr,"ERROR: No memery for path name");
+		return -1;
+	}
 }
+
 int command_ls(int argc, char** argv){
-	DIR *dir;
+	DIR * dir;
 	char * dir_path = ".";
-	struct dirent *dp;
+	struct dirent *entry;
 
 	if((strcmp(argv[argc - 1],"ls")))
 	{
 		dir_path = argv[argc-1];
 	}
 
-    if ((dir = opendir (dir_path)) == NULL) {
-        fprintf(stderr, "%s is not a directory.\n", dir_path);
-        return -1;
-    }
+	if ((dir = opendir (dir_path)) == NULL) {
+		fprintf(stderr, "ERROR: %s is not a directory.\n", dir_path);
+		return -1;
+	}
 
-    while ((dp = readdir (dir)) != NULL) { 
-            if((strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)) {
-                continue;
-            }
+	while ((entry = readdir (dir)) != NULL) { 
+			// Filter the current directory and parent directory
+			if((strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)) {
+				continue;
+			}
 
-            printf("%s\n", dp->d_name);
-    }
+			printf("%s\n", entry->d_name);
+	}
 	closedir(dir);
 
 	return 0;
