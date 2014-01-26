@@ -24,29 +24,32 @@ typedef int (*FUNC)(int, char**);
 typedef struct{
 	char *name;
 	FUNC funct;
-	char *desp;
 } CMD;
 
 //Function to prompt the current time
 int print_prompt();
 //Function for executing the command
-int execute_command(int argc, char ** argv);
+int command_execute(int argc, char ** argv);
 //Function for parse the string input
-void parse_command(char cmd[], int * argc, char ** argv);
+void command_parse(char cmd[], int * argc, char ** argv);
 
 int command_cd(int argc, char** argv);
 int command_pwd(int argc, char** argv);
 int command_ls(int argc, char** argv);
+int command_mkdir(int argc, char** argv);
+int command_rmdir(int argc, char** argv);
 CMD * command_search(char * commandName);
 
 int is_quit(char * str);
 
 //Create a structure for the information about the command supported by this shell
 CMD cmd[] = {
-	{"pwd", command_pwd, "Print working directory."},
-	{"ls", command_ls, "List information about the FILE."},
-	{"cd", command_cd, "Change the current directory."},
-	{ (char *)NULL, (FUNC)NULL, (char *)NULL }
+	{"pwd", command_pwd},
+	{"ls", command_ls},
+	{"cd", command_cd},
+	{"mkdir", command_mkdir},
+	{"rmdir", command_rmdir},
+	{ (char *)NULL, (FUNC)NULL }
 };
 
 char * cmdArgv[128];
@@ -64,7 +67,7 @@ int main(int argc, char ** argv)
 			//Output error status when error occurs
 			fprintf(stderr, "ERROR READ COMMANDS:%s\n",strerror( errno ));
 
-		parse_command(cmdLine, &cmdArgc, cmdArgv);
+		command_parse(cmdLine, &cmdArgc, cmdArgv);
 		if(cmdArgv[0] != NULL){
 			if(is_quit(cmdArgv[0])){
 				// if the input command is one of 'quit' or 'q' or 'exit', quit the shell with the exit code 0
@@ -72,7 +75,7 @@ int main(int argc, char ** argv)
 				exit(0);
 			}
 
-			execute_command(cmdArgc, cmdArgv);
+			command_execute(cmdArgc, cmdArgv);
 		}
 	}
 	return 0;
@@ -104,7 +107,7 @@ int print_prompt(){
 
 	return 0;
 }
-int execute_command(int argc, char ** argv){
+int command_execute(int argc, char ** argv){
 	int childPid;
 	int status;
 	CMD * command;
@@ -140,14 +143,14 @@ int execute_command(int argc, char ** argv){
 
 	return 0;
 }
-char* skip_blank(char* str)
+char* blank_skip(char* str)
 {
 	//Skip the whitespace in the string
 	while (isspace(*str)) ++str;
 	return str;
 }
-void parse_command(char cmd[], int * argc, char ** argv){
-	cmd = skip_blank(cmd);
+void command_parse(char cmd[], int * argc, char ** argv){
+	cmd = blank_skip(cmd);
 	//Make the next pointer point to the next white character
 	char* next = strchr(cmd, ' ');
 	//variable for counting the last element
@@ -158,7 +161,7 @@ void parse_command(char cmd[], int * argc, char ** argv){
 		next[0] = '\0';
 		argv[last] = cmd;
 		++last;
-		cmd = skip_blank(next + 1);
+		cmd = blank_skip(next + 1);
 		next = strchr(cmd, ' ');
 	}
 
@@ -184,6 +187,7 @@ int is_quit(char * str){
 CMD * command_search(char * commandName)
 {
 	int i = 0;
+	// Search the name in the shell command library
 	while(cmd[i].name != NULL){
 		if (!strcmp(commandName,cmd[i].name)){
 			return &cmd[i];
@@ -259,4 +263,39 @@ int command_ls(int argc, char** argv){
 	closedir(dir);
 
 	return 0;
+}
+
+int command_mkdir(int argc, char** argv){
+	char * dir;
+	mode_t cmask = (mode_t) 0777;
+
+	if(argc < 2){
+		return -1;
+	}
+
+	dir = argv[argc-1];
+	if(mkdir(dir,cmask) == -1){
+		return -1;
+	}
+
+	return 0;
+}
+int command_rmdir(int argc, char** argv){
+
+	if(argc < 2){
+		return -1;
+	}
+
+	char * dir = argv[argc-1];
+	struct stat buf;
+
+	if((-1 == lstat(dir, &buf)) || !S_ISDIR(buf.st_mode)){
+		return -1;
+	}
+
+	if(!rmdir(dir)){
+		return 0;
+	}else{
+		return -1;
+	}
 }
