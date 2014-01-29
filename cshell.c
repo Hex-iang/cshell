@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -26,18 +27,24 @@ typedef struct{
 	FUNC funct;
 } CMD;
 
+
 //Function to prompt the current time
 int print_prompt();
 //Function for executing the command
-int command_execute(int argc, char ** argv);
+int command_execute(int *argc, char ** argv);
 //Function for parse the string input
 void command_parse(char cmd[], int * argc, char ** argv);
+//Function for judge the redirect status
+int command_judge_redirct(int * argc, char ** argv, int * w_flag, int* r_flag);
 
+//Shell commands 
 int command_cd(int argc, char** argv);
 int command_pwd(int argc, char** argv);
 int command_ls(int argc, char** argv);
 int command_mkdir(int argc, char** argv);
 int command_rmdir(int argc, char** argv);
+
+//Shelll commands search function
 CMD * command_search(char * commandName);
 
 int is_quit(char * str);
@@ -55,6 +62,10 @@ CMD cmd[] = {
 char * cmdArgv[128];
 int cmdArgc;
 char cmdLine[1024];		
+
+//File identifier for redirection
+int input,lastin;
+int output,lastout;
 
 int main(int argc, char ** argv)
 {
@@ -75,7 +86,7 @@ int main(int argc, char ** argv)
 				exit(0);
 			}
 
-			command_execute(cmdArgc, cmdArgv);
+			command_execute(&cmdArgc, cmdArgv);
 		}
 	}
 	return 0;
@@ -107,11 +118,12 @@ int print_prompt(){
 
 	return 0;
 }
-int command_execute(int argc, char ** argv){
+int command_execute(int * argc, char ** argv){
 	int childPid;
 	int status;
 	CMD * command;
-
+	int index;
+	
 	//System call function fork to create a childprocess
 	childPid = fork();
 	if (childPid == -1){
@@ -119,23 +131,82 @@ int command_execute(int argc, char ** argv){
 		fprintf(stderr, "ERROR CREATING PROCESS:%s\n", strerror( errno ));
 		exit(-1);
 	}else if(childPid == 0){
+		int i_flag = FALSE;
+		int o_flag = FALSE;
 		//In the child process, execute the command
-
-		if((command = command_search(argv[0]))){
-			if(-1 == command->funct(argc, argv)){
-				//fprintf(stderr, "ERROR: Shell function execute failed\n");
-				fprintf(stderr, "ERROR EXECUTING SHELL COMMAND: %s\n", strerror( errno ));
-			}
+		
+		index = command_judge_redirct(argc, argv, &o_flag, &i_flag);
+		
+		if(o_flag){
+			//open the redirected file
+			output = open(argv[index + 1], O_CREAT | O_WRONLY);
+			//store the stdout
+			lastout = dup(1);
+			//change the stdout to the output file
+			dup2(output,1);
+			//process the arguments with redirect
+			argv[index] = NULL;
+			*argc = index;
 		}
-		else{
-			if (execvp(argv[0], argv) == -1) {    
+		
+		if(i_flag){
+			//open the file we shold redirected from 
+			input = open(argv[index + 1],O_RDONLY);
+			//store the stdin
+			lastin = dup(0);
+			//change the stdin to the input file
+			dup2(input,0);
+			//process the arguments with redirect
+			argv[index] = NULL;
+			*argc = index;
+		}
+		
+		if((command = command_search(argv[0]))){	
+			if(-1 == command->funct(*argc, argv)){
 				//If goes error, exit with status code 1
-				fprintf(stderr, "ERROR EXECUTING SYSTEM PROGRAM: %s\n",strerror( errno ));
-
+				if(o_flag){
+					//Recover the stdout
+					dup2(lastout,1);
+					close(output);
+				}
+				if(i_flag){
+					//Recover the stdin
+					dup2(lastin,0);
+					close(input);
+				}
+				fprintf(stderr, "ERROR EXECUTING SHELL COMMAND: %s\n", strerror( errno ));
 				exit(1);
 			}
 		}
-
+		else{
+			if (execvp(argv[0], argv) == -1) {
+				//If goes error, exit with status code 1
+				if(o_flag){
+					//Recover the stdout
+					dup2(lastout,1);
+					close(output);
+				}
+				if(i_flag){
+					//Recover the stdin
+					dup2(lastin,0);
+					close(input);
+				}
+				fprintf(stderr, "ERROR EXECUTING SYSTEM PROGRAM: %s\n",strerror( errno ));
+				exit(1);
+			}
+		}
+		
+		if(o_flag){
+			//Recover the stdout
+			dup2(lastout,1);
+			close(output);
+		}
+		if(i_flag){
+			//Recover the stdin
+			dup2(lastin,0);
+			close(input);
+		}
+				
 	}else{
 		//Ignore the situation that process running in the background
 		waitpid(childPid, &status, 0);
@@ -143,12 +214,31 @@ int command_execute(int argc, char ** argv){
 
 	return 0;
 }
+
+int command_judge_redirct(int * argc, char ** argv, int * o_flag, int* i_flag){
+	int i;
+	int num = *argc;
+	for (i = 0; i < num ;i++ ) {
+		if(!strcmp(argv[i],">")){
+			*o_flag = TRUE;
+			return i;
+		}
+		else if(!strcmp(argv[i],"<")){
+			*i_flag = TRUE;
+			return i;
+		}
+	}
+
+	return FALSE;
+}
+
 char* blank_skip(char* str)
 {
 	//Skip the whitespace in the string
 	while (isspace(*str)) ++str;
 	return str;
 }
+
 void command_parse(char cmd[], int * argc, char ** argv){
 	cmd = blank_skip(cmd);
 	//Make the next pointer point to the next white character
@@ -280,6 +370,7 @@ int command_mkdir(int argc, char** argv){
 
 	return 0;
 }
+
 int command_rmdir(int argc, char** argv){
 
 	if(argc < 2){
