@@ -18,6 +18,9 @@
 #define TRUE 1
 #define FALSE 0
 
+#define IN  0
+#define OUT 1
+
 //Structure for the command string storage as well as the command argument storage
 
 typedef int (*FUNC)(int, char**);
@@ -118,6 +121,7 @@ int print_prompt(){
 
 	return 0;
 }
+
 int command_execute(int * argc, char ** argv){
 	int childPid;
 	int status;
@@ -141,9 +145,9 @@ int command_execute(int * argc, char ** argv){
 			//open the redirected file
 			output = open(argv[index + 1], O_CREAT | O_WRONLY);
 			//store the stdout
-			lastout = dup(1);
+			lastout = dup(OUT);
 			//change the stdout to the output file
-			dup2(output,1);
+			dup2(output,OUT);
 			//process the arguments with redirect
 			argv[index] = NULL;
 			*argc = index;
@@ -153,9 +157,9 @@ int command_execute(int * argc, char ** argv){
 			//open the file we shold redirected from 
 			input = open(argv[index + 1],O_RDONLY);
 			//store the stdin
-			lastin = dup(0);
+			lastin = dup(IN);
 			//change the stdin to the input file
-			dup2(input,0);
+			dup2(input,IN);
 			//process the arguments with redirect
 			argv[index] = NULL;
 			*argc = index;
@@ -166,12 +170,12 @@ int command_execute(int * argc, char ** argv){
 				//If goes error, exit with status code 1
 				if(o_flag){
 					//Recover the stdout
-					dup2(lastout,1);
+					dup2(lastout,OUT);
 					close(output);
 				}
 				if(i_flag){
 					//Recover the stdin
-					dup2(lastin,0);
+					dup2(lastin,IN);
 					close(input);
 				}
 				fprintf(stderr, "ERROR EXECUTING SHELL COMMAND: %s\n", strerror( errno ));
@@ -183,12 +187,12 @@ int command_execute(int * argc, char ** argv){
 				//If goes error, exit with status code 1
 				if(o_flag){
 					//Recover the stdout
-					dup2(lastout,1);
+					dup2(lastout,OUT);
 					close(output);
 				}
 				if(i_flag){
 					//Recover the stdin
-					dup2(lastin,0);
+					dup2(lastin,IN);
 					close(input);
 				}
 				fprintf(stderr, "ERROR EXECUTING SYSTEM PROGRAM: %s\n",strerror( errno ));
@@ -198,12 +202,12 @@ int command_execute(int * argc, char ** argv){
 		
 		if(o_flag){
 			//Recover the stdout
-			dup2(lastout,1);
+			dup2(lastout,OUT);
 			close(output);
 		}
 		if(i_flag){
 			//Recover the stdin
-			dup2(lastin,0);
+			dup2(lastin,IN);
 			close(input);
 		}
 				
@@ -213,23 +217,6 @@ int command_execute(int * argc, char ** argv){
 	}
 
 	return 0;
-}
-
-int command_judge_redirct(int * argc, char ** argv, int * o_flag, int* i_flag){
-	int i;
-	int num = *argc;
-	for (i = 0; i < num ;i++ ) {
-		if(!strcmp(argv[i],">")){
-			*o_flag = TRUE;
-			return i;
-		}
-		else if(!strcmp(argv[i],"<")){
-			*i_flag = TRUE;
-			return i;
-		}
-	}
-
-	return FALSE;
 }
 
 char* blank_skip(char* str)
@@ -389,4 +376,21 @@ int command_rmdir(int argc, char** argv){
 	}else{
 		return -1;
 	}
+}
+
+int command_judge_redirct(int * argc, char ** argv, int * o_flag, int* i_flag){
+	int i;
+	int num = *argc;
+	for (i = 0; i < num ;i++ ) {
+		if(!strcmp(argv[i],">")){
+			*o_flag = TRUE;
+			return i;
+		}
+		else if(!strcmp(argv[i],"<")){
+			*i_flag = TRUE;
+			return i;
+		}
+	}
+
+	return FALSE;
 }
